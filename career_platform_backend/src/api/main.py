@@ -2,17 +2,33 @@ from typing import List, Tuple
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+
 from sqlalchemy.orm import Session
 
 from src.core.db import Base, engine, SessionLocal
 from src.models import Role, Competency, RoleCompetency
+from src.api.routers.roles import router as roles_router
+from src.api.routers.assessments import router as assessments_router
+from src.api.routers.roadmaps import router as roadmaps_router
 
-# Create FastAPI app with basic metadata
+openapi_tags = [
+    {"name": "Roles", "description": "Role directory and competency models"},
+    {"name": "Assessments", "description": "User/session competency assessments and progress"},
+    {"name": "Roadmaps", "description": "Gap analysis and roadmap generation/retrieval"},
+]
+
+# Create FastAPI app with extended metadata
 app = FastAPI(
     title="Career Navigator Backend",
-    description="Backend API for role competency modeling and career roadmaps.",
+    description=(
+        "Backend API for role competency modeling, assessments, and career roadmaps.\n\n"
+        "Usage notes:\n"
+        "- Start by fetching roles and their competency models.\n"
+        "- Record assessments for the current user or anonymous session.\n"
+        "- Generate a roadmap from role A to role B; payload includes mind map JSON.\n"
+    ),
     version="0.1.0",
+    openapi_tags=openapi_tags,
 )
 
 app.add_middleware(
@@ -35,7 +51,7 @@ def startup_init() -> None:
     # Seed data if roles table is empty
     db: Session = SessionLocal()
     try:
-        roles_count = db.scalar(select(Role).count()) if hasattr(select(Role), "count") else db.query(Role).count()
+        roles_count = db.query(Role).count()
         if roles_count == 0:
             seed_initial_data(db)
             db.commit()
@@ -117,7 +133,7 @@ def seed_initial_data(db: Session) -> None:
     db.add_all(rc_entities)
 
 
-@app.get("/")
+@app.get("/", summary="Health Check", tags=["Roles"])
 def health_check():
     """
     Health Check
@@ -125,3 +141,9 @@ def health_check():
     Returns {"message": "Healthy"} when operational.
     """
     return {"message": "Healthy"}
+
+
+# Register routers
+app.include_router(roles_router)
+app.include_router(assessments_router)
+app.include_router(roadmaps_router)
